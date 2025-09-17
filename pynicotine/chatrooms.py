@@ -447,6 +447,9 @@ class ChatRooms:
         if core.users.login_username and find_whole_word(core.users.login_username.lower(), text.lower()) > -1:
             return "hilite"
 
+        if config.sections["words"]["highlighted"] and any(word.lower() in text.lower() for word in config.sections["words"]["highlighted"]):
+            return "hilite"
+
         return "remote"
 
     def _say_chat_room(self, msg, is_global=False):

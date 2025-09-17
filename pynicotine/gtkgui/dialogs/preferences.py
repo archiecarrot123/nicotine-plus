@@ -1319,6 +1319,7 @@ class ChatsPage:
             self.enable_spell_checker_toggle,
             self.enable_tab_completion_toggle,
             self.format_codes_label,
+            self.highlight_list_container,
             self.min_chars_dropdown_spinner,
             self.private_room_toggle,
             self.recent_private_messages_spinner,
@@ -1343,6 +1344,20 @@ class ChatsPage:
             application.window, parent=self.censor_list_container, multi_select=True,
             activate_row_callback=self.on_edit_censored,
             delete_accelerator_callback=self.on_remove_censored,
+            columns={
+                "pattern": {
+                    "column_type": "text",
+                    "title": _("Pattern"),
+                    "default_sort_type": "ascending"
+                }
+            }
+        )
+
+        self.highlighted_patterns = []
+        self.highlight_list_view = TreeView(
+            application.window, parent=self.highlight_list_container, multi_select=True,
+            activate_row_callback=self.on_edit_highlighted,
+            delete_accelerator_callback=self.on_remove_highlighted,
             columns={
                 "pattern": {
                     "column_type": "text",
@@ -1398,7 +1413,8 @@ class ChatsPage:
                 "censored": self.censor_list_view,
                 "censorwords": self.censor_text_patterns_toggle,
                 "autoreplaced": self.replacement_list_view,
-                "replacewords": self.auto_replace_words_toggle
+                "replacewords": self.auto_replace_words_toggle,
+                "highlighted": self.highlight_list_view
             },
             "ui": {
                 "spellcheck": self.enable_spell_checker_toggle
@@ -1408,6 +1424,7 @@ class ChatsPage:
     def destroy(self):
 
         self.censor_list_view.destroy()
+        self.highlight_list_view.destroy()
         self.replacement_list_view.destroy()
 
         self.__dict__.clear()
@@ -1415,8 +1432,10 @@ class ChatsPage:
     def set_settings(self):
 
         self.censor_list_view.clear()
+        self.highlight_list_view.clear()
         self.replacement_list_view.clear()
         self.censored_patterns.clear()
+        self.highlighted_patterns.clear()
         self.replacements.clear()
 
         self.application.preferences.set_widgets_data(self.options)
@@ -1426,6 +1445,7 @@ class ChatsPage:
         self.format_codes_label.set_visible(not self.application.isolated_mode)
 
         self.censored_patterns = config.sections["words"]["censored"][:]
+        self.highlighted_patterns = config.sections["words"]["highlighted"][:]
         self.replacements = config.sections["words"]["autoreplaced"].copy()
 
     def get_settings(self):
@@ -1454,6 +1474,7 @@ class ChatsPage:
                 "commands": self.complete_commands_toggle.get_active(),
                 "censored": self.censored_patterns[:],
                 "censorwords": self.censor_text_patterns_toggle.get_active(),
+                "highlighted": self.highlighted_patterns[:],
                 "autoreplaced": self.replacements.copy(),
                 "replacewords": self.auto_replace_words_toggle.get_active()
             },
@@ -1533,6 +1554,67 @@ class ChatsPage:
             self.censor_list_view.remove_row(orig_iterator)
             self.censored_patterns.remove(censor)
 
+    def on_add_highlighted_response(self, dialog, _response_id, _data):
+
+        pattern = dialog.get_entry_value()
+
+        if pattern and pattern not in self.highlighted_patterns:
+            self.highlighted_patterns.append(pattern)
+            self.highlight_list_view.add_row([pattern])
+
+    def on_add_highlighted(self, *_args):
+
+        EntryDialog(
+            parent=self.application.preferences,
+            title=_("Highlight Pattern"),
+            message=_("Enter a pattern you want to highlight. Add spaces around the pattern if you don't "
+                      "want to match strings inside words (may fail at the beginning and end of lines)."),
+            action_button_label=_("_Add"),
+            callback=self.on_add_highlighted_response
+        ).present()
+
+    def on_edit_highlighted_response(self, dialog, _response_id, iterator):
+
+        pattern = dialog.get_entry_value()
+
+        if not pattern:
+            return
+
+        old_pattern = self.highlight_list_view.get_row_value(iterator, "pattern")
+        orig_iterator = self.highlight_list_view.iterators[old_pattern]
+
+        self.highlight_list_view.remove_row(orig_iterator)
+        self.highlighted_patterns.remove(old_pattern)
+
+        self.highlight_list_view.add_row([pattern])
+        self.highlighted_patterns.append(pattern)
+
+    def on_edit_highlighted(self, *_args):
+
+        for iterator in self.highlight_list_view.get_selected_rows():
+            pattern = self.highlight_list_view.get_row_value(iterator, "pattern")
+
+            EntryDialog(
+                parent=self.application.preferences,
+                title=_("Edit Highlighted Pattern"),
+                message=_("Enter a pattern you want to highlight. Add spaces around the pattern if you don't "
+                          "want to match strings inside words (may fail at the beginning and end of lines)."),
+                action_button_label=_("_Edit"),
+                callback=self.on_edit_highlighted_response,
+                callback_data=iterator,
+                default=pattern
+            ).present()
+            return
+
+    def on_remove_highlighted(self, *_args):
+
+        for iterator in reversed(list(self.highlight_list_view.get_selected_rows())):
+            highlight = self.highlight_list_view.get_row_value(iterator, "pattern")
+            orig_iterator = self.highlight_list_view.iterators[highlight]
+
+            self.highlight_list_view.remove_row(orig_iterator)
+            self.highlighted_patterns.remove(highlight)
+
     def on_add_replacement_response(self, dialog, _response_id, _data):
 
         pattern = dialog.get_entry_value()
@@ -1599,6 +1681,17 @@ class ChatsPage:
 
             self.replacement_list_view.remove_row(orig_iterator)
             del self.replacements[replacement]
+
+    def on_add_replacement_response(self, dialog, _response_id, _data):
+
+        pattern = dialog.get_entry_value()
+        replacement = dialog.get_second_entry_value()
+
+        if not pattern or not replacement:
+            return
+
+        self.replacements[pattern] = replacement
+        self.replacement_list_view.add_row([pattern, replacement])
 
 
 class UserInterfacePage:

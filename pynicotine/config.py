@@ -243,6 +243,7 @@ class Config:
                     "thier": "their",
                     "tihs": "this"
                 },
+                "highlighted": [],
                 "censorwords": False,
                 "replacewords": False,
                 "tab": True,
