@@ -27,6 +27,7 @@ from pynicotine.core import core
 from pynicotine.events import events
 from pynicotine.logfacility import log
 from pynicotine.slskmessages import ConnectionType
+from pynicotine.slskmessages import CloseConnection
 from pynicotine.slskmessages import DownloadFile
 from pynicotine.slskmessages import FileOffset
 from pynicotine.slskmessages import FolderContentsRequest
@@ -1093,7 +1094,7 @@ class Downloads(Transfers):
         """A peer is requesting to start uploading a file to us."""
 
         if msg.is_outgoing:
-            # Upload init message sent to ourselves, ignore
+            # Transfer init message sent to another peer, ignore
             return
 
         username = msg.username
@@ -1101,6 +1102,8 @@ class Downloads(Transfers):
         download = self.active_users.get(username, {}).get(token)
 
         if download is None or download.sock is not None:
+            log.add_transfer("Received file transfer init message with unknown token %s, closing connection", token)
+            core.send_message_to_network_thread(CloseConnection(msg.sock))
             return
 
         virtual_path = download.virtual_path
@@ -1172,6 +1175,7 @@ class Downloads(Transfers):
                 core.send_message_to_peer(username, FileOffset(sock, offset))
 
             else:
+                core.send_message_to_network_thread(CloseConnection(sock))
                 self._finish_transfer(download)
                 need_update = False
 
